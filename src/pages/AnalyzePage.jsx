@@ -26,22 +26,23 @@ function AnalyzePage() {
 
     setIsLoading(true)
     setResults(null)
-    
+
     try {
       // Run categorization (LLM call)
-      const { category, reasoning } = await categorizeMessage(message)
-      
-      // Calculate urgency (rule-based)
-      const urgency = calculateUrgency(message)
-      
+      const { category, urgency: aiUrgency, suggestedResponse, reasoning } = await categorizeMessage(message)
+
+      // Calculate urgency (use AI if available, else rule-based fallback)
+      const urgency = aiUrgency || calculateUrgency(message)
+
       // Get recommended action (template-based)
       const recommendedAction = getRecommendedAction(category)
-      
+
       const analysisResult = {
         message,
         category,
         urgency,
         recommendedAction,
+        suggestedResponse,
         reasoning,
         timestamp: new Date().toISOString()
       }
@@ -96,11 +97,10 @@ function AnalyzePage() {
             <button
               onClick={handleAnalyze}
               disabled={isLoading}
-              className={`flex-1 py-3 rounded-lg font-semibold ${
-                isLoading
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+              className={`flex-1 py-3 rounded-lg font-semibold ${isLoading
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
             >
               {isLoading ? (
                 <span className="flex items-center justify-center">
@@ -128,7 +128,7 @@ function AnalyzePage() {
         {results && (
           <div className="bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">Analysis Results</h2>
-            
+
             <div className="space-y-4">
               <div>
                 <div className="text-sm font-semibold text-gray-600 mb-1">Category</div>
@@ -139,11 +139,10 @@ function AnalyzePage() {
 
               <div>
                 <div className="text-sm font-semibold text-gray-600 mb-1">Urgency Level</div>
-                <div className={`inline-block px-4 py-2 rounded-lg font-semibold ${
-                  results.urgency === 'High' ? 'bg-red-200 text-red-900' :
+                <div className={`inline-block px-4 py-2 rounded-lg font-semibold ${results.urgency === 'High' ? 'bg-red-200 text-red-900' :
                   results.urgency === 'Medium' ? 'bg-yellow-200 text-yellow-900' :
-                  'bg-green-200 text-green-900'
-                }`}>
+                    'bg-green-200 text-green-900'
+                  }`}>
                   {results.urgency}
                 </div>
               </div>
@@ -154,6 +153,26 @@ function AnalyzePage() {
                   <p className="text-gray-800">{results.recommendedAction}</p>
                 </div>
               </div>
+
+              {results.suggestedResponse && (
+                <div>
+                  <div className="text-sm font-semibold text-gray-600 mb-1 flex justify-between items-center">
+                    <span>Suggested Response</span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(results.suggestedResponse)
+                        alert('Response copied to clipboard!')
+                      }}
+                      className="text-blue-600 hover:text-blue-800 text-xs font-semibold"
+                    >
+                      Copy Response
+                    </button>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 relative group">
+                    <p className="text-gray-800 whitespace-pre-wrap">{results.suggestedResponse}</p>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="text-sm font-semibold text-gray-600 mb-1">AI Reasoning</div>
