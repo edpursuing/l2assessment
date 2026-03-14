@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
+import { getGroups } from '../utils/groupsHelper'
 
 function HistoryPage() {
   const [history, setHistory] = useState([])
+  const [groups, setGroups] = useState([])
   const [filter, setFilter] = useState('all')
   const [expandedIndex, setExpandedIndex] = useState(null)
 
@@ -13,6 +16,12 @@ function HistoryPage() {
   const loadHistory = () => {
     const savedHistory = JSON.parse(localStorage.getItem('triageHistory') || '[]')
     setHistory(savedHistory)
+    setGroups(getGroups())
+  }
+
+  const getTicketGroup = (ticket) => {
+    if (!ticket.groupId) return null
+    return groups.find(g => g.id === ticket.groupId) || null
   }
 
   const clearHistory = () => {
@@ -22,8 +31,8 @@ function HistoryPage() {
     }
   }
 
-  const sortedHistory = [...history].sort((a, b) => 
-    a.message.localeCompare(b.message)
+  const sortedHistory = [...history].sort((a, b) =>
+    new Date(b.timestamp) - new Date(a.timestamp)
   )
   
   const filteredHistory = filter === 'all' 
@@ -116,7 +125,7 @@ function HistoryPage() {
                     <div className="text-gray-800 font-medium mb-2">
                       "{item.message.substring(0, 100)}{item.message.length > 100 ? '...' : ''}"
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center flex-wrap gap-2">
                       <span className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-semibold">
                         {item.category}
                       </span>
@@ -127,6 +136,18 @@ function HistoryPage() {
                       }`}>
                         {item.urgency} Urgency
                       </span>
+                      {(() => {
+                        const group = getTicketGroup(item)
+                        return group ? (
+                          <Link
+                            to="/groups"
+                            onClick={e => e.stopPropagation()}
+                            className="text-xs bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-semibold hover:bg-amber-200"
+                          >
+                            {group.title}
+                          </Link>
+                        ) : null
+                      })()}
                     </div>
                   </div>
                   <div className="text-gray-400 ml-4">
@@ -150,6 +171,25 @@ function HistoryPage() {
                         {item.recommendedAction}
                       </div>
                     </div>
+                    {(() => {
+                      const group = getTicketGroup(item)
+                      return group ? (
+                        <div>
+                          <div className="text-xs font-semibold text-gray-600 mb-1">Issue Group</div>
+                          <div className="bg-amber-50 border border-amber-200 rounded p-3 flex items-center justify-between">
+                            <div>
+                              <div className="text-sm font-semibold text-amber-900">{group.title}</div>
+                              <div className="text-xs text-amber-700 mt-0.5">
+                                {group.affectedCount} affected · {group.category} · {group.status === 'resolved' ? 'Resolved' : group.status === 'in_progress' ? 'In Progress' : 'Open'}
+                              </div>
+                            </div>
+                            <Link to="/groups" className="text-xs text-amber-700 underline hover:text-amber-900 font-semibold">
+                              View Group
+                            </Link>
+                          </div>
+                        </div>
+                      ) : null
+                    })()}
                     <div>
                       <div className="text-xs font-semibold text-gray-600 mb-1">AI Reasoning</div>
                       <div className="bg-white p-3 rounded border border-gray-200">

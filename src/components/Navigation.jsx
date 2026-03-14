@@ -57,12 +57,22 @@ function Navigation() {
             <Link
               to="/dashboard"
               className={`px-4 py-2 rounded ${
-                isActive('/dashboard') 
-                  ? 'bg-blue-700 font-semibold' 
+                isActive('/dashboard')
+                  ? 'bg-blue-700 font-semibold'
                   : 'hover:bg-blue-500'
               }`}
             >
               Dashboard
+            </Link>
+            <Link
+              to="/groups"
+              className={`px-4 py-2 rounded ${
+                isActive('/groups')
+                  ? 'bg-blue-700 font-semibold'
+                  : 'hover:bg-blue-500'
+              }`}
+            >
+              Groups
             </Link>
           </div>
         </div>

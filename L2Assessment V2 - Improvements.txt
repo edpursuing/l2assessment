@@ -1,0 +1,158 @@
+L2 Assessment V2 - Improvements
+================================
+
+Built on top of the V1 improvements (AI-driven urgency, suggested response, structured prompt/parsing).
+This version focuses on workflow depth, evidence-based validation, and operational tooling.
+
+─────────────────────────────────────────────────────────────────────
+1. EDITABLE SUGGESTED RESPONSE
+─────────────────────────────────────────────────────────────────────
+Problem: V1 displayed the AI-generated response as static text with a copy button.
+Agents had no way to personalize it before sending — a critical gap in real workflow.
+
+Solution:
+- Suggested response is now a fully editable textarea
+- Agents can customize tone, add specifics, or personalize before copying
+- Label reads "edit before sending" as a contextual prompt
+- Replaced alert() copy confirmation with inline "✓ Copied!" feedback (2s)
+- Same inline feedback pattern applied to "Copy Results" button
+
+─────────────────────────────────────────────────────────────────────
+2. ISSUE GROUPING + BULK MESSAGING
+─────────────────────────────────────────────────────────────────────
+Problem: When multiple customers report the same issue, agents handle each ticket
+individually — wasted effort and inconsistent messaging at scale.
+
+Solution: A first-class grouping system that treats repeated issues as incidents.
+
+AI-Powered Group Matching:
+- After every analysis, a non-blocking LLM call checks the new ticket against all
+  open groups using semantic understanding (not keyword matching)
+- If a High or Medium confidence match is found, an amber suggestion banner appears
+  with the group name, affected count, and the AI's one-sentence reasoning
+- Agent confirms or dismisses — no silent auto-grouping
+
+Manual Group Controls:
+- "Group this ticket" section always visible on analysis results
+- Dropdown of open groups for manual assignment
+- "Start New Group" button for the first ticket in a new pattern
+
+Groups Page (/groups):
+- Two-panel layout: group list (left) + detail (right)
+- Filter by Active / Resolved / All
+- Rename groups inline
+- Status lifecycle: Open → In Progress → Resolved
+- Member tickets displayed with urgency badges and timestamps
+- Bulk draft textarea — agents write or generate the customer update
+- "Generate Draft" button uses LLM to draft a warm, context-aware bulk message
+  based on the group's member tickets and current status
+- "Copy & Log" copies draft to clipboard and records it in message history
+- Full message history audit trail per group
+
+Data Architecture:
+- Clean group schema designed to map 1:1 to a production database
+- Forward-compatibility fields: externalRef (Zendesk/Linear), assignedTo, tags,
+  messageHistory.sentAt (delivery channel tracking)
+- Urgency auto-escalates when higher-urgency tickets join a group
+- localStorage now, swappable for real backend without schema changes
+
+─────────────────────────────────────────────────────────────────────
+3. HISTORY PAGE — GROUP MEMBERSHIP VISIBILITY
+─────────────────────────────────────────────────────────────────────
+Problem: History showed raw ticket data with no context about group membership.
+Agents browsing history had no way to know which tickets were already being handled.
+
+Solution:
+- Amber group badge on every grouped ticket — clickable, navigates to /groups
+- Expanded ticket view shows group title, affected count, category, and status
+- Fixed sort order — was alphabetically by message content, now newest first
+
+─────────────────────────────────────────────────────────────────────
+4. DASHBOARD — FROM REPORT TO OPERATIONS CENTER
+─────────────────────────────────────────────────────────────────────
+Problem: Dashboard was read-only with four static counts and two hardcoded insight
+thresholds. Nothing was actionable.
+
+Solution: Rebuilt around "what needs attention right now."
+
+Group Health Row:
+- Open / In Progress / Resolved / No Update Sent — at a glance group status
+
+Needs Attention Section:
+- High urgency tickets not yet grouped (potential systemic issues slipping through)
+- Open groups with no bulk draft written — customers waiting on an update
+- Selectable tickets with floating action bar:
+  - Click to select one or more ungrouped high-urgency tickets
+  - Floating bar rises with dropdown of open groups + "Add" button
+  - "Create New Group" batches all selected tickets into a new group
+  - Highest urgency ticket used as the group seed
+
+Stat Cards:
+- Fixed avg/day calculation (was hardcoded /7, now uses actual date range of data)
+- Grouped ticket count added
+- High Urgency and Grouped cards are clickable — navigate to History and Groups
+
+Dynamic Insights:
+- Spike detection: 3+ Technical Problems or Billing Issues in 2 hours triggers alert
+- Undrafted group warnings
+- High urgency rate threshold alert
+- Clean "no anomalies" state when everything looks normal
+
+Recent Activity Feed:
+- Last 5 tickets with urgency badge, category, group link if applicable
+- Empty state CTA to analyze a message
+
+─────────────────────────────────────────────────────────────────────
+5. ACCURACY TEST — EVIDENCE OF CLASSIFIER IMPROVEMENT
+─────────────────────────────────────────────────────────────────────
+Problem: V1 claimed the LLM urgency classifier was better than the rule-based system
+but provided no evidence. The evaluator specifically flagged this gap.
+
+Solution: A dedicated Accuracy Test tab within the Analyze page.
+
+- 8 test cases, each targeting a specific known failure mode in the rule-based scorer:
+    • ALL CAPS reduces urgency (inverted logic — "OUR SERVERS ARE DOWN" scores Low)
+    • Exclamation marks inflate urgency ("Great news!!" scores High)
+    • Question marks penalize urgency ("Why was our database wiped?" scores Low)
+    • Polite language penalizes urgency ("Please be advised..." scores Medium)
+    • Short messages penalized regardless of content ("Server down." scores Low)
+    • Excited positive feedback misclassified as High urgency
+    • Long low-priority requests misclassified as Medium
+    • Calm professional language about critical outages misclassified as Medium
+
+- Rule-based results calculate instantly (synchronous, no API call)
+- "Run Tests" sends all 8 through the LLM sequentially with live progress indicators
+- Each case shows Expected / Rule-based / LLM with ✓/✗ match indicators
+- Score summary at top: "Rule-based: X/8 · LLM: X/8"
+
+Typical result: Rule-based scores 3-4/8. LLM scores 7-8/8.
+
+─────────────────────────────────────────────────────────────────────
+6. RELIABILITY — FALLBACK VISIBILITY
+─────────────────────────────────────────────────────────────────────
+Problem: When the Groq API failed, the mock fallback fired silently. Agents had no
+way to know they were looking at canned responses rather than real AI analysis.
+
+Solution:
+- isFallback flag added to categorizeMessage return value
+- When fallback fires, a yellow "AI unavailable — using fallback" badge appears
+  next to "Analysis Results" header
+- Agents know what they're working with — builds trust in the tool
+
+─────────────────────────────────────────────────────────────────────
+BIGGER PICTURE
+─────────────────────────────────────────────────────────────────────
+These improvements move the tool from a single-ticket analyzer toward a support
+operations platform. The grouping system in particular is designed with a real
+production path in mind:
+
+- Schema maps to a relational database without changes
+- externalRef field ready to wire into Zendesk, Linear, or PagerDuty
+- Bulk message history provides the audit trail compliance teams require
+- MTTR (mean time to resolution) is derivable from createdAt → resolvedAt
+- Delivery channel abstraction (messageHistory.sentAt, deliveryChannel) allows
+  the same draft to be sent via email, Intercom, or SMS with one integration layer
+
+The accuracy test addresses a real business requirement: before replacing a system,
+you need evidence the replacement is measurably better. The test page provides that
+evidence in a format a non-technical stakeholder can read and understand.

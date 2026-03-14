@@ -81,7 +81,102 @@ Message: ${message}`
     };
   } catch (error) {
     console.warn('Groq API failed, using mock response:', error.message);
-    return getMockCategorization(message);
+    return { ...getMockCategorization(message), isFallback: true };
+  }
+}
+
+/**
+ * Check if a new ticket matches any open issue group
+ * Returns { groupId, confidence, reason } or null
+ */
+export async function findMatchingGroup(ticket, openGroups) {
+  if (!openGroups || openGroups.length === 0) return null
+
+  try {
+    const groupList = openGroups.map(g =>
+      `ID: ${g.id}\nTitle: ${g.title}\nSummary: ${g.summary}`
+    ).join('\n\n')
+
+    const response = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{
+        role: "user",
+        content: `A new customer support ticket has been received:
+
+Category: ${ticket.category}
+Message: "${ticket.message}"
+
+These issue groups are currently open:
+
+${groupList}
+
+Does this ticket describe the same core problem as any of the open groups? Only match if the underlying issue is genuinely the same — not just the same category.
+
+Respond in exactly this format:
+Match: [group ID or NONE]
+Confidence: [High, Medium, or Low]
+Reason: [one sentence]`
+      }],
+      temperature: 0.1
+    })
+
+    const content = response.choices[0].message.content
+    const matchId = (content.match(/Match:\s*(.+)/i) || [])[1]?.trim()
+    const confidence = (content.match(/Confidence:\s*(.+)/i) || [])[1]?.trim()
+    const reason = (content.match(/Reason:\s*(.+)/i) || [])[1]?.trim()
+
+    if (!matchId || matchId === 'NONE' || confidence === 'Low') return null
+
+    return { groupId: matchId, confidence, reason }
+  } catch (error) {
+    console.warn('Group matching failed:', error.message)
+    return null
+  }
+}
+
+/**
+ * Generate a bulk update draft for a group using the LLM
+ */
+export async function generateBulkDraft(group, memberTickets) {
+  try {
+    const ticketSummaries = memberTickets
+      .map((t, i) => `${i + 1}. "${t.message.slice(0, 100)}${t.message.length > 100 ? '...' : ''}"`)
+      .join('\n')
+
+    const statusContext = group.status === 'in_progress'
+      ? 'Our team is actively working on this and has made progress.'
+      : 'We have identified this issue and are investigating.'
+
+    const response = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{
+        role: "user",
+        content: `You are drafting a bulk update message to send to multiple customers who are all experiencing the same issue.
+
+Issue: ${group.title}
+Category: ${group.category}
+Urgency: ${group.urgency}
+Status context: ${statusContext}
+
+Sample customer messages for context:
+${ticketSummaries}
+
+Write a professional, warm, and empathetic update message that:
+- Acknowledges the issue without being dismissive
+- Gives a clear, honest status update
+- Sets realistic expectations without making promises you can't keep
+- Feels personal and human — not like a mass blast email
+- Is concise (3-4 sentences)
+
+Write only the message body. No subject line, no greeting placeholder.`
+      }],
+      temperature: 0.4
+    })
+
+    return response.choices[0].message.content.trim()
+  } catch (error) {
+    console.warn('Bulk draft generation failed:', error.message)
+    return `We're aware of the issue you reported and want to keep you updated. Our team has identified this as a priority and is actively working toward a resolution. We'll follow up as soon as we have more to share — thank you for your patience.`
   }
 }
 

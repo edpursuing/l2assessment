@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage'
 import AnalyzePage from './pages/AnalyzePage'
 import HistoryPage from './pages/HistoryPage'
 import DashboardPage from './pages/DashboardPage'
+import GroupsPage from './pages/GroupsPage'
 
 function App() {
   return (
@@ -15,6 +16,7 @@ function App() {
           <Route path="/analyze" element={<AnalyzePage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/groups" element={<GroupsPage />} />
         </Routes>
       </div>
     </Router>
